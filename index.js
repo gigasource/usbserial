@@ -3,6 +3,7 @@ const usb = require('usb');
 const EventEmitter = require('events');
 
 function findDevices(vid, pid) {
+  console.log(usb.getDeviceList());
   return usb.getDeviceList()
     .filter(device => device.deviceDescriptor.idVendor === vid &&
             device.deviceDescriptor.idProduct === pid);
@@ -75,6 +76,17 @@ class UsbSerial extends EventEmitter {
     device.open();
     assert(device.interfaces.length === 1);
     let iface = device.interfaces[0];
+
+    if (/^linux/.test(process.platform)) {
+      if (iface.isKernelDriverActive()) {
+        try {
+          iface.detachKernelDriver();
+        } catch (e) {
+          console.error("[ERROR] Could not detatch kernel driver: %s", e)
+        }
+      }
+    }
+
     iface.claim();
     let int_ep = find_ep(iface, usb.LIBUSB_TRANSFER_TYPE_INTERRUPT, 'in');
     int_ep.on('data', data => {
@@ -107,7 +119,7 @@ class UsbSerial extends EventEmitter {
       .then(() => vendor_write(device, 0, 1))
       .then(() => vendor_write(device, 1, 0))
       .then(() => vendor_write(device, 2, 0x44))
-      .then(() => setBaudrate(device, 75))
+      .then(() => setBaudrate(device, 9600))
       .then(() => in_ep.startPoll())
       .then(() => this.emit('ready'))
       .catch(err => this.emit('error', err));
